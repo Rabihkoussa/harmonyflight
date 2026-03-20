@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Harmony Flight</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: #fdfdfd; font-family: sans-serif; touch-action: none; }
+        canvas { display: block; background: linear-gradient(#e0f7fa, #fdfdfd); }
+        #ui { position: absolute; top: 10px; width: 100%; text-align: center; pointer-events: none; font-size: 20px; }
+    </style>
+</head>
+<body>
+
+<div id="ui">Score: <span id="score">0</span></div>
+<canvas id="gameCanvas"></canvas>
+
+<script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const scoreEl = document.getElementById('score');
+
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+
+    let score = 0;
+    let gameActive = true;
+
+    // Load Images
+    const img1 = new Image(); img1.src = 'char1.png';
+    const img2 = new Image(); img2.src = 'char2.png';
+
+    const charA = { x: canvas.width * 0.25, y: canvas.height - 150, active: true, size: 60 };
+    const charB = { x: canvas.width * 0.75, y: canvas.height - 150, active: true, size: 60 };
+
+    const obstacles = [];
+
+    // Handle Touch
+    window.addEventListener('touchmove', (e) => {
+        for (let i = 0; i < e.touches.length; i++) {
+            let touch = e.touches[i];
+            // Left side of screen controls charA
+            if (touch.clientX < canvas.width / 2 && charA.active) {
+                charA.x = touch.clientX;
+            } 
+            // Right side of screen controls charB
+            else if (touch.clientX >= canvas.width / 2 && charB.active) {
+                charB.x = touch.clientX;
+            }
+        }
+    }, { passive: false });
+
+    function spawnObstacle() {
+        if (!gameActive) return;
+        obstacles.push({
+            x: Math.random() * canvas.width,
+            y: -50,
+            size: 30 + Math.random() * 20,
+            speed: 3 + (score / 500)
+        });
+        setTimeout(spawnObstacle, 1000 - (score / 10));
+    }
+
+    function update() {
+        if (!gameActive) return;
+
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // Draw Characters
+        if (charA.active) ctx.drawImage(img1, charA.x - 30, charA.y, charA.size, charA.size);
+        if (charB.active) ctx.drawImage(img2, charB.x - 30, charB.y, charB.size, charB.size);
+
+        // Handle Obstacles
+        for (let i = obstacles.length - 1; i >= 0; i--) {
+            let o = obstacles[i];
+            o.y += o.speed;
+
+            // Draw Obstacle (as a simple circle for now)
+            ctx.fillStyle = '#ff8a80';
+            ctx.beginPath();
+            ctx.arc(o.x, o.y, o.size/2, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Collision Detection
+            if (charA.active && checkCollision(charA, o)) charA.active = false;
+            if (charB.active && checkCollision(charB, o)) charB.active = false;
+
+            if (o.y > canvas.height) obstacles.splice(i, 1);
+        }
+
+        if (!charA.active && !charB.active) {
+            gameActive = false;
+            alert("Connection lost. Final Score: " + Math.floor(score));
+            location.reload();
+        }
+
+        score += 0.1;
+        scoreEl.innerText = Math.floor(score);
+        requestAnimationFrame(update);
+    }
+
+    function checkCollision(char, obs) {
+        let dx = char.x - obs.x;
+        let dy = (char.y + 30) - obs.y;
+        let distance = Math.sqrt(dx * dx + dy * dy);
+        return distance < (char.size/2 + obs.size/2);
+    }
+
+    spawnObstacle();
+    update();
+</script>
+</body>
+</html>
