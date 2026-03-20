@@ -1,8 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Harmony Flight</title>
+    <style>
+        body { 
+            margin: 0; 
+            padding: 0; 
+            overflow: hidden; 
+            background: #fdfdfd; 
+            font-family: sans-serif; 
+            touch-action: none; 
+        }
+        
+        canvas { 
+            display: block; 
+            background: linear-gradient(#e0f7fa, #fdfdfd); 
+        }
+
+        #ui { 
+            position: absolute; 
+            top: 20px; 
+            width: 100%; 
+            text-align: center; 
+            pointer-events: none; 
+            font-size: 24px; 
+            font-weight: bold;
+            color: #333;
+            z-index: 100;
+        }
+
+        /* Center Line Visual (Optional - helps player see the boundary) */
+        #divider {
+            position: absolute;
+            left: 50%;
+            top: 0;
+            bottom: 0;
+            width: 2px;
+            background: rgba(0,0,0,0.05);
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+
+<div id="ui">Score: <span id="score">0</span></div>
+<div id="divider"></div>
+<canvas id="gameCanvas"></canvas>
+
 <script>
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
     const scoreEl = document.getElementById('score');
 
+    // Set canvas to full screen
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
 
@@ -10,7 +62,7 @@
     let gameActive = true;
     let imagesLoaded = 0;
 
-    // Load Images
+    // 1. Load Images
     const img1 = new Image(); 
     img1.src = 'char1.png';
     img1.onload = () => { imagesLoaded++; checkStart(); };
@@ -19,8 +71,23 @@
     img2.src = 'char2.png';
     img2.onload = () => { imagesLoaded++; checkStart(); };
 
-    const charA = { x: canvas.width * 0.25, y: canvas.height - 150, active: true, size: 80 };
-    const charB = { x: canvas.width * 0.75, y: canvas.height - 150, active: true, size: 80 };
+    // 2. Character Setup (Positioned 1/3 up from bottom)
+    const charSize = 100; // Adjust for visibility
+    const verticalPos = canvas.height * 0.66; // Roughly 1/3 from bottom
+    const centerLimit = canvas.width / 2;
+
+    const charA = { 
+        x: canvas.width * 0.25, 
+        y: verticalPos, 
+        active: true, 
+        size: charSize 
+    };
+    const charB = { 
+        x: canvas.width * 0.75, 
+        y: verticalPos, 
+        active: true, 
+        size: charSize 
+    };
 
     const obstacles = [];
 
@@ -31,16 +98,22 @@
         }
     }
 
-    // Handle Touch
+    // 3. Dual-Touch Control with "No Crossing" Logic
     window.addEventListener('touchmove', (e) => {
-        e.preventDefault(); // Prevents the screen from bouncing/scrolling
+        e.preventDefault(); 
         for (let i = 0; i < e.touches.length; i++) {
             let touch = e.touches[i];
-            if (touch.clientX < canvas.width / 2 && charA.active) {
-                charA.x = touch.clientX;
+            let tx = touch.clientX;
+
+            // Left Side Control
+            if (tx < centerLimit && charA.active) {
+                // Keep character A on the left side only
+                charA.x = Math.min(tx, centerLimit - (charSize / 2));
             } 
-            else if (touch.clientX >= canvas.width / 2 && charB.active) {
-                charB.x = touch.clientX;
+            // Right Side Control
+            else if (tx >= centerLimit && charB.active) {
+                // Keep character B on the right side only
+                charB.x = Math.max(tx, centerLimit + (charSize / 2));
             }
         }
     }, { passive: false });
@@ -50,10 +123,12 @@
         obstacles.push({
             x: Math.random() * canvas.width,
             y: -50,
-            size: 40,
-            speed: 4 + (score / 100)
+            size: 20 + Math.random() * 20,
+            speed: 4 + (score / 50)
         });
-        setTimeout(spawnObstacle, 1000 - Math.min(score * 2, 600));
+        // Faster spawning as score goes up
+        let nextSpawn = Math.max(300, 1000 - (score * 5));
+        setTimeout(spawnObstacle, nextSpawn);
     }
 
     function update() {
@@ -61,29 +136,39 @@
 
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-        // Draw Characters
-        if (charA.active) ctx.drawImage(img1, charA.x - 40, charA.y, charA.size, charA.size);
-        if (charB.active) ctx.drawImage(img2, charB.x - 40, charB.y, charB.size, charB.size);
+        // 4. Draw Characters (Maintain Aspect Ratio)
+        // Draw Image 1
+        if (charA.active) {
+            ctx.drawImage(img1, charA.x - (charSize/2), charA.y, charSize, charSize);
+        }
+        // Draw Image 2
+        if (charB.active) {
+            ctx.drawImage(img2, charB.x - (charSize/2), charB.y, charSize, charSize);
+        }
 
-        // Handle Obstacles
+        // 5. Handle Obstacles
         for (let i = obstacles.length - 1; i >= 0; i--) {
             let o = obstacles[i];
             o.y += o.speed;
 
+            // Draw Obstacle
             ctx.fillStyle = '#ff8a80';
             ctx.beginPath();
-            ctx.arc(o.x, o.y, 15, 0, Math.PI * 2);
+            ctx.arc(o.x, o.y, o.size/2, 0, Math.PI * 2);
             ctx.fill();
 
+            // Collision Detection
             if (charA.active && checkCollision(charA, o)) charA.active = false;
             if (charB.active && checkCollision(charB, o)) charB.active = false;
 
+            // Remove off-screen obstacles
             if (o.y > canvas.height) obstacles.splice(i, 1);
         }
 
+        // 6. Game Over Logic
         if (!charA.active && !charB.active) {
             gameActive = false;
-            alert("Connection lost. Score: " + Math.floor(score));
+            alert("The connection was broken. Score: " + Math.floor(score));
             location.reload();
         }
 
@@ -94,8 +179,11 @@
 
     function checkCollision(char, obs) {
         let dx = char.x - obs.x;
-        let dy = (char.y + 40) - obs.y;
+        let dy = (char.y + (charSize/2)) - obs.y;
         let distance = Math.sqrt(dx * dx + dy * dy);
-        return distance < 45; 
+        // Collision if distance is less than half char size + obstacle size
+        return distance < (char.size / 2.5); 
     }
 </script>
+</body>
+</html>
